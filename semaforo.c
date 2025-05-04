@@ -6,6 +6,7 @@
 #include "lib/ssd1306.h"
 #include "lib/font.h"
 #include "lib/np_led.h"
+#include "lib/neopixel_matrices.h"
 #include "FreeRTOS.h"
 #include "FreeRTOSConfig.h"
 #include "task.h"
@@ -190,6 +191,63 @@ void vBuzzerTask()
     }
 }
 
+void vNeoPixel()
+{
+    npInit(MATRIX_LED_PIN); // Inicializa o LED neopixel
+    npClear();              // Limpa o buffer do LED neopixel
+
+    // Aplica o brilho na matriz de pedestres
+    applyBrightnessToMatrix(PEDESTRIANS_WALK, 0.05);
+    applyBrightnessToMatrix(PEDESTRIANS_STOP, 0.05);
+
+    applyBrightnessToMatrix(NIGHT_MODE_MATRIX, 0.05); // Aplica o brilho na matriz do modo noturno
+
+    while (true)
+    {
+        if (OPERATION_MODE == NORMAL_MODE)
+        {
+            switch (NORMAL_MODE_SIGNAL_FLAG)
+            {
+            case GREEN_SIGNAL:
+                updateMatrix(PEDESTRIANS_STOP); // Atualiza a matriz com o padrão de parada para os pedestres
+                break;
+            case YELLOW_SIGNAL:
+                for (size_t i = 0; i < 3; i++)
+                {
+                    npClear(); // Limpa o buffer do LED neopixel
+                    npWrite();
+                    vTaskDelay(pdMS_TO_TICKS(500)); // Delay para piscar a matriz de LEDs
+                    updateMatrix(PEDESTRIANS_STOP);
+                    vTaskDelay(pdMS_TO_TICKS(500)); // Delay para piscar a matriz de LEDs
+                }
+                break;
+            case RED_SIGNAL:
+                updateMatrix(PEDESTRIANS_WALK);  // Atualiza a matriz com o padrão de andar para os pedestres
+                vTaskDelay(pdMS_TO_TICKS(3000)); // Delay para evitar uso excessivo da CPU
+
+                for (size_t i = 0; i < 3; i++)
+                {
+                    npClear(); // Limpa o buffer do LED neopixel
+                    npWrite();
+                    vTaskDelay(pdMS_TO_TICKS(500)); // Delay para piscar a matriz de LEDs
+                    updateMatrix(PEDESTRIANS_WALK); // Atualiza a matriz com o padrão de andar para os pedestres
+                    vTaskDelay(pdMS_TO_TICKS(500)); // Delay para piscar a matriz de LEDs
+                }
+                break;
+            }
+        }
+        else if (OPERATION_MODE == NIGHT_MODE)
+        {
+            npClear(); // Limpa o buffer do LED neopixel
+            npWrite();
+            vTaskDelay(pdMS_TO_TICKS(500));  // Delay para piscar a matriz de LEDs
+            updateMatrix(NIGHT_MODE_MATRIX); // Atualiza a matriz com o padrão de andar para os pedestres
+            vTaskDelay(pdMS_TO_TICKS(500));  // Delay para piscar a matriz de LEDs
+        }
+        vTaskDelay(pdMS_TO_TICKS(10)); // Delay para evitar uso excessivo da CPU
+    }
+}
+
 // Task para modo normal
 void vNormalModeControllerTask()
 {
@@ -254,7 +312,7 @@ void vDisplayTask()
         ssd1306_draw_string(&ssd, "Contador  LEDs", 10, 41); // Desenha uma string
         ssd1306_draw_string(&ssd, str_y, 40, 52);            // Desenha uma string
         ssd1306_send_data(&ssd);                             // Atualiza o display
-        sleep_ms(735);
+        vTaskDelay(pdMS_TO_TICKS(100));                      // Delay para não travar a CPU
     }
 }
 
@@ -305,6 +363,8 @@ int main()
     xTaskCreate(vLEDTask, "LED Task", configMINIMAL_STACK_SIZE,
                 NULL, tskIDLE_PRIORITY, NULL);
     xTaskCreate(vBuzzerTask, "Buzzer Task", configMINIMAL_STACK_SIZE,
+                NULL, tskIDLE_PRIORITY, NULL);
+    xTaskCreate(vNeoPixel, "NeoPixel Task", configMINIMAL_STACK_SIZE,
                 NULL, tskIDLE_PRIORITY, NULL);
 
     vTaskStartScheduler();
