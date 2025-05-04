@@ -196,11 +196,10 @@ void vNeoPixel()
     npInit(MATRIX_LED_PIN); // Inicializa o LED neopixel
     npClear();              // Limpa o buffer do LED neopixel
 
-    // Aplica o brilho na matriz de pedestres
+    // Aplica o brilho na matriz de pedestres e modo noturno
     applyBrightnessToMatrix(PEDESTRIANS_WALK, 0.05);
     applyBrightnessToMatrix(PEDESTRIANS_STOP, 0.05);
-
-    applyBrightnessToMatrix(NIGHT_MODE_MATRIX, 0.05); // Aplica o brilho na matriz do modo noturno
+    applyBrightnessToMatrix(NIGHT_MODE_MATRIX, 0.05);
 
     while (true)
     {
@@ -209,42 +208,68 @@ void vNeoPixel()
             switch (NORMAL_MODE_SIGNAL_FLAG)
             {
             case GREEN_SIGNAL:
-                updateMatrix(PEDESTRIANS_STOP); // Atualiza a matriz com o padrão de parada para os pedestres
+                updateMatrix(PEDESTRIANS_STOP);
                 break;
+
             case YELLOW_SIGNAL:
                 for (size_t i = 0; i < 3; i++)
                 {
-                    npClear(); // Limpa o buffer do LED neopixel
+                    if (OPERATION_MODE != NORMAL_MODE)
+                        break;
+
+                    npClear();
                     npWrite();
-                    vTaskDelay(pdMS_TO_TICKS(500)); // Delay para piscar a matriz de LEDs
+                    vTaskDelay(pdMS_TO_TICKS(500));
+
+                    if (OPERATION_MODE != NORMAL_MODE)
+                        break;
+
                     updateMatrix(PEDESTRIANS_STOP);
-                    vTaskDelay(pdMS_TO_TICKS(500)); // Delay para piscar a matriz de LEDs
+                    vTaskDelay(pdMS_TO_TICKS(500));
                 }
                 break;
+
             case RED_SIGNAL:
-                updateMatrix(PEDESTRIANS_WALK);  // Atualiza a matriz com o padrão de andar para os pedestres
-                vTaskDelay(pdMS_TO_TICKS(3000)); // Delay para evitar uso excessivo da CPU
+                updateMatrix(PEDESTRIANS_WALK);
+                for (size_t i = 0; i < 30; i++) // 3000ms em pedaços de 100ms
+                {
+                    if (OPERATION_MODE != NORMAL_MODE)
+                        break;
+                    vTaskDelay(pdMS_TO_TICKS(100));
+                }
 
                 for (size_t i = 0; i < 3; i++)
                 {
-                    npClear(); // Limpa o buffer do LED neopixel
+                    if (OPERATION_MODE != NORMAL_MODE)
+                        break;
+
+                    npClear();
                     npWrite();
-                    vTaskDelay(pdMS_TO_TICKS(500)); // Delay para piscar a matriz de LEDs
-                    updateMatrix(PEDESTRIANS_WALK); // Atualiza a matriz com o padrão de andar para os pedestres
-                    vTaskDelay(pdMS_TO_TICKS(500)); // Delay para piscar a matriz de LEDs
+                    vTaskDelay(pdMS_TO_TICKS(500));
+
+                    if (OPERATION_MODE != NORMAL_MODE)
+                        break;
+
+                    updateMatrix(PEDESTRIANS_WALK);
+                    vTaskDelay(pdMS_TO_TICKS(500));
                 }
                 break;
             }
         }
         else if (OPERATION_MODE == NIGHT_MODE)
         {
-            npClear(); // Limpa o buffer do LED neopixel
+            npClear();
             npWrite();
-            vTaskDelay(pdMS_TO_TICKS(500));  // Delay para piscar a matriz de LEDs
-            updateMatrix(NIGHT_MODE_MATRIX); // Atualiza a matriz com o padrão de andar para os pedestres
-            vTaskDelay(pdMS_TO_TICKS(500));  // Delay para piscar a matriz de LEDs
+            vTaskDelay(pdMS_TO_TICKS(500));
+
+            if (OPERATION_MODE != NIGHT_MODE)
+                continue;
+
+            updateMatrix(NIGHT_MODE_MATRIX);
+            vTaskDelay(pdMS_TO_TICKS(500));
         }
-        vTaskDelay(pdMS_TO_TICKS(10)); // Delay para evitar uso excessivo da CPU
+
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 
@@ -267,7 +292,7 @@ void vNormalModeControllerTask()
 
 void vNightModeControllerTask()
 {
-    vTaskSuspend(xHandleNormalMode); // Suspende a tarefa do modo noturno
+    vTaskSuspend(xHandleNormalMode); // Suspende a tarefa do modo normal
     while (true)
     {
         NIGHT_MODE_SIGNAL_FLAG = ON;
