@@ -105,14 +105,23 @@ void vNormalMode1Task()
 
 void vNightMode2Task()
 {
+    gpio_init(LED_G);
+    gpio_init(LED_B);
     gpio_init(LED_R);
+
+    gpio_set_dir(LED_G, GPIO_OUT);
+    gpio_set_dir(LED_B, GPIO_OUT);
     gpio_set_dir(LED_R, GPIO_OUT);
+
     while (true)
     {
+        gpio_put(LED_G, true);
         gpio_put(LED_R, true);
-        vTaskDelay(pdMS_TO_TICKS(500));
+        vTaskDelay(pdMS_TO_TICKS(1000));
+
+        gpio_put(LED_G, false);
         gpio_put(LED_R, false);
-        vTaskDelay(pdMS_TO_TICKS(2224));
+        vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }
 
@@ -160,14 +169,16 @@ void vAlterTask4()
     {
         if (OPERATION_MODE == NORMAL_MODE)
         {
+            vTaskSuspend(xHandleNightMode); // Suspende a tarefa do modo noturno
+            vTaskResume(xHandleNormalMode); // Retoma a tarefa do modo normal
         }
         else if (OPERATION_MODE == NIGHT_MODE)
         {
-            gpio_put(LED_R, true);
-            vTaskDelay(pdMS_TO_TICKS(500));
-            gpio_put(LED_R, false);
-            vTaskDelay(pdMS_TO_TICKS(500));
+            vTaskSuspend(xHandleNormalMode); // Suspende a tarefa do modo normal
+            vTaskResume(xHandleNightMode);   // Retoma a tarefa do modo noturno
         }
+
+        vTaskDelay(pdMS_TO_TICKS(100)); // Delay para não travar a CPU
     }
 }
 
