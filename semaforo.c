@@ -41,7 +41,22 @@ typedef enum
     NIGHT_MODE
 } OperationMode;
 
-volatile uint16_t OPERATION_MODE;
+typedef enum
+{
+    GREEN_SIGNAL,
+    YELLOW_SIGNAL,
+    RED_SIGNAL,
+} NormalModeSignalState;
+
+typedef enum
+{
+    OFF,
+    ON
+} NightModeSignalState;
+
+volatile uint16_t OPERATION_MODE = NORMAL_MODE; // Modo de operação inicial
+volatile uint16_t NORMAL_MODE_SIGNAL_FLAG = GREEN_SIGNAL;
+volatile uint16_t NIGHT_MODE_SIGNAL_FLAG = ON;
 
 TaskHandle_t xHandleNormalMode = NULL; // Handle para a tarefa do modo normal
 TaskHandle_t xHandleNightMode = NULL;  // Handle para a tarefa do modo noturno
@@ -73,59 +88,139 @@ void setup_pwm(uint gpio, uint *slice, uint16_t level)
     pwm_set_enabled(*slice, true);
 }
 
-// Task para modo normal
-void vNormalMode1Task()
+// Task para controlar o LED RGB
+void vLEDTask()
 {
-    setup_pwm(BUZZER_A, &slice_buzzer, 0);
-
     gpio_init(LED_G);
     gpio_init(LED_B);
     gpio_init(LED_R);
-
     gpio_set_dir(LED_G, GPIO_OUT);
     gpio_set_dir(LED_B, GPIO_OUT);
     gpio_set_dir(LED_R, GPIO_OUT);
 
-    npInit(MATRIX_LED_PIN);
-
     while (true)
     {
-        gpio_put(LED_G, true);
-        vTaskDelay(pdMS_TO_TICKS(10000));
+        if (OPERATION_MODE == NORMAL_MODE)
+        {
+            switch (NORMAL_MODE_SIGNAL_FLAG)
+            {
+            case GREEN_SIGNAL:
+                gpio_put(LED_G, true);
+                gpio_put(LED_R, false);
+                break;
+            case YELLOW_SIGNAL:
+                gpio_put(LED_G, true);
+                gpio_put(LED_R, true);
+                break;
+            case RED_SIGNAL:
+                gpio_put(LED_G, false);
+                gpio_put(LED_R, true);
+                break;
+            }
+        }
+        else if (OPERATION_MODE == NIGHT_MODE)
+        {
+            switch (NIGHT_MODE_SIGNAL_FLAG)
+            {
+            case ON:
+                gpio_put(LED_G, true);
+                gpio_put(LED_R, true);
+                break;
+            case OFF:
+                gpio_put(LED_G, false);
+                gpio_put(LED_R, false);
+                break;
+            }
+        }
 
-        gpio_put(LED_G, true);
-        gpio_put(LED_R, true);
-        vTaskDelay(pdMS_TO_TICKS(4000));
-
-        gpio_put(LED_R, true);
-        gpio_put(LED_G, false);
-        vTaskDelay(pdMS_TO_TICKS(10000));
+        vTaskDelay(pdMS_TO_TICKS(10)); // Pequeno delay para evitar uso excessivo da CPU
     }
 }
 
-void vNightMode2Task()
+// Task para controlar o buzzer
+void vBuzzerTask()
 {
-    gpio_init(LED_G);
-    gpio_init(LED_B);
-    gpio_init(LED_R);
-
-    gpio_set_dir(LED_G, GPIO_OUT);
-    gpio_set_dir(LED_B, GPIO_OUT);
-    gpio_set_dir(LED_R, GPIO_OUT);
+    setup_pwm(BUZZER_A, &slice_buzzer, 0);
 
     while (true)
     {
-        gpio_put(LED_G, true);
-        gpio_put(LED_R, true);
+        if (OPERATION_MODE == NORMAL_MODE)
+        {
+            switch (NORMAL_MODE_SIGNAL_FLAG)
+            {
+            case GREEN_SIGNAL:
+                // 1 beep curto por segundo
+                pwm_set_gpio_level(BUZZER_A, PERIOD / 2);
+                vTaskDelay(pdMS_TO_TICKS(100));
+                pwm_set_gpio_level(BUZZER_A, 0);
+                vTaskDelay(pdMS_TO_TICKS(900));
+                break;
+
+            case YELLOW_SIGNAL:
+                // beeps curtos intermitentes
+                pwm_set_gpio_level(BUZZER_A, PERIOD / 2);
+                vTaskDelay(pdMS_TO_TICKS(100));
+                pwm_set_gpio_level(BUZZER_A, 0);
+                vTaskDelay(pdMS_TO_TICKS(400));
+                break;
+
+            case RED_SIGNAL:
+                // tom contínuo curto (500ms ligado, 1500ms desligado)
+                pwm_set_gpio_level(BUZZER_A, PERIOD / 2);
+                vTaskDelay(pdMS_TO_TICKS(500));
+                pwm_set_gpio_level(BUZZER_A, 0);
+                vTaskDelay(pdMS_TO_TICKS(1500));
+                break;
+            }
+        }
+        else if (OPERATION_MODE == NIGHT_MODE)
+        {
+            switch (NIGHT_MODE_SIGNAL_FLAG)
+            {
+            case ON:
+                pwm_set_gpio_level(BUZZER_A, PERIOD / 2);
+                break;
+            case OFF:
+                pwm_set_gpio_level(BUZZER_A, 0);
+                break;
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
+// Task para modo normal
+void vNormalModeControllerTask()
+{
+    vTaskSuspend(xHandleNightMode); // Suspende a tarefa do modo noturno
+    while (true)
+    {
+        NORMAL_MODE_SIGNAL_FLAG = GREEN_SIGNAL;
+        vTaskDelay(pdMS_TO_TICKS(6000));
+
+        NORMAL_MODE_SIGNAL_FLAG = YELLOW_SIGNAL;
+        vTaskDelay(pdMS_TO_TICKS(3000));
+
+        NORMAL_MODE_SIGNAL_FLAG = RED_SIGNAL;
+        vTaskDelay(pdMS_TO_TICKS(6000));
+    }
+}
+
+void vNightModeControllerTask()
+{
+    vTaskSuspend(xHandleNormalMode); // Suspende a tarefa do modo noturno
+    while (true)
+    {
+        NIGHT_MODE_SIGNAL_FLAG = ON;
         vTaskDelay(pdMS_TO_TICKS(1000));
 
-        gpio_put(LED_G, false);
-        gpio_put(LED_R, false);
+        NIGHT_MODE_SIGNAL_FLAG = OFF;
         vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }
 
-void vDisplay3Task()
+void vDisplayTask()
 {
     // I2C Initialisation. Using it at 400Khz.
     i2c_init(I2C_PORT, 400 * 1000);
@@ -163,7 +258,7 @@ void vDisplay3Task()
     }
 }
 
-void vAlterTask4()
+void vAlterTaskTask()
 {
     while (true)
     {
@@ -199,13 +294,17 @@ int main()
 
     stdio_init_all();
 
-    xTaskCreate(vNormalMode1Task, "Normal mode task", configMINIMAL_STACK_SIZE,
+    xTaskCreate(vNormalModeControllerTask, "Normal mode task", configMINIMAL_STACK_SIZE,
                 NULL, tskIDLE_PRIORITY, &xHandleNormalMode);
-    xTaskCreate(vNightMode2Task, "Night mode task", configMINIMAL_STACK_SIZE,
+    xTaskCreate(vNightModeControllerTask, "Night mode task", configMINIMAL_STACK_SIZE,
                 NULL, tskIDLE_PRIORITY, &xHandleNightMode);
-    xTaskCreate(vDisplay3Task, "Cont Task Disp3", configMINIMAL_STACK_SIZE,
+    xTaskCreate(vDisplayTask, "Cont Task Disp3", configMINIMAL_STACK_SIZE,
                 NULL, tskIDLE_PRIORITY, NULL);
-    xTaskCreate(vAlterTask4, "Alter Task", configMINIMAL_STACK_SIZE,
+    xTaskCreate(vAlterTaskTask, "Alter Task", configMINIMAL_STACK_SIZE,
+                NULL, tskIDLE_PRIORITY, NULL);
+    xTaskCreate(vLEDTask, "LED Task", configMINIMAL_STACK_SIZE,
+                NULL, tskIDLE_PRIORITY, NULL);
+    xTaskCreate(vBuzzerTask, "Buzzer Task", configMINIMAL_STACK_SIZE,
                 NULL, tskIDLE_PRIORITY, NULL);
 
     vTaskStartScheduler();
