@@ -31,7 +31,7 @@ static volatile uint32_t last_time_A = 0;
 
 const uint16_t BUZZER_A = 21;
 
-const float DIVIDER_PWM = 16.0; // Divisor de clock para PWM
+const float DIVIDER_PWM = 64.0; // Divisor de clock para PWM
 const uint16_t PERIOD = 4096;   // Período do PWM
 uint16_t last_buzzer_time = 0;
 uint slice_buzzer;
@@ -150,16 +150,16 @@ void vBuzzerTask()
             switch (NORMAL_MODE_SIGNAL_FLAG)
             {
             case GREEN_SIGNAL:
-                // 1 beep curto por segundo
-                pwm_set_gpio_level(BUZZER_A, PERIOD / 2);
-                vTaskDelay(pdMS_TO_TICKS(100));
+                // 1 beep curto por um segundo
+                pwm_set_gpio_level(BUZZER_A, 128);
+                vTaskDelay(pdMS_TO_TICKS(1000));
                 pwm_set_gpio_level(BUZZER_A, 0);
-                vTaskDelay(pdMS_TO_TICKS(900));
+                vTaskDelay(pdMS_TO_TICKS(500));
                 break;
 
             case YELLOW_SIGNAL:
                 // beeps curtos intermitentes
-                pwm_set_gpio_level(BUZZER_A, PERIOD / 2);
+                pwm_set_gpio_level(BUZZER_A, 128);
                 vTaskDelay(pdMS_TO_TICKS(100));
                 pwm_set_gpio_level(BUZZER_A, 0);
                 vTaskDelay(pdMS_TO_TICKS(400));
@@ -167,7 +167,7 @@ void vBuzzerTask()
 
             case RED_SIGNAL:
                 // tom contínuo curto (500ms ligado, 1500ms desligado)
-                pwm_set_gpio_level(BUZZER_A, PERIOD / 2);
+                pwm_set_gpio_level(BUZZER_A, 128);
                 vTaskDelay(pdMS_TO_TICKS(500));
                 pwm_set_gpio_level(BUZZER_A, 0);
                 vTaskDelay(pdMS_TO_TICKS(1500));
@@ -179,7 +179,7 @@ void vBuzzerTask()
             switch (NIGHT_MODE_SIGNAL_FLAG)
             {
             case ON:
-                pwm_set_gpio_level(BUZZER_A, PERIOD / 2);
+                pwm_set_gpio_level(BUZZER_A, 128);
                 break;
             case OFF:
                 pwm_set_gpio_level(BUZZER_A, 0);
@@ -295,24 +295,45 @@ void vDisplayTask()
     ssd1306_fill(&ssd, false);
     ssd1306_send_data(&ssd);
 
-    char str_y[5]; // Buffer para armazenar a string
-    int contador = 0;
     bool cor = true;
     while (true)
     {
-        sprintf(str_y, "%d", contador);                      // Converte em string
-        contador++;                                          // Incrementa o contador
-        ssd1306_fill(&ssd, !cor);                            // Limpa o display
-        ssd1306_rect(&ssd, 3, 3, 122, 60, cor, !cor);        // Desenha um retângulo
-        ssd1306_line(&ssd, 3, 25, 123, 25, cor);             // Desenha uma linha
-        ssd1306_line(&ssd, 3, 37, 123, 37, cor);             // Desenha uma linha
-        ssd1306_draw_string(&ssd, "CEPEDI   TIC37", 8, 6);   // Desenha uma string
-        ssd1306_draw_string(&ssd, "EMBARCATECH", 20, 16);    // Desenha uma string
-        ssd1306_draw_string(&ssd, "  FreeRTOS", 10, 28);     // Desenha uma string
-        ssd1306_draw_string(&ssd, "Contador  LEDs", 10, 41); // Desenha uma string
-        ssd1306_draw_string(&ssd, str_y, 40, 52);            // Desenha uma string
-        ssd1306_send_data(&ssd);                             // Atualiza o display
-        vTaskDelay(pdMS_TO_TICKS(100));                      // Delay para não travar a CPU
+        ssd1306_fill(&ssd, !cor);                     // Limpa o display
+        ssd1306_rect(&ssd, 3, 3, 122, 60, cor, !cor); // Desenha um retângulo
+        ssd1306_line(&ssd, 3, 25, 123, 25, cor);      // Desenha uma linha
+        // ssd1306_line(&ssd, 3, 37, 123, 37, cor);             // Desenha uma linha
+        ssd1306_draw_string(&ssd, "SEMAFORO", 20, 6);     // Desenha uma string
+        ssd1306_draw_string(&ssd, "EMBARCATECH", 20, 16); // Desenha uma string
+
+        if (OPERATION_MODE == NORMAL_MODE)
+        {
+            ssd1306_draw_string(&ssd, "Modo Normal", 10, 28); // Desenha uma string
+
+            switch (NORMAL_MODE_SIGNAL_FLAG)
+            {
+            case GREEN_SIGNAL:
+                ssd1306_draw_string(&ssd, "Sinal Verde", 10, 39);   // Desenha uma string
+                ssd1306_draw_string(&ssd, "Pedestre para", 10, 49); // Desenha uma string
+                break;
+            case YELLOW_SIGNAL:
+                ssd1306_draw_string(&ssd, "Sinal Amarelo", 10, 39); // Desenha uma string
+                ssd1306_draw_string(&ssd, "Pedestre para", 10, 49); // Desenha uma string
+                break;
+            case RED_SIGNAL:
+                ssd1306_draw_string(&ssd, "Sinal Vermelho", 10, 39); // Desenha uma string
+                ssd1306_draw_string(&ssd, "Pedestre anda", 10, 49);  // Desenha uma string
+                break;
+            }
+        }
+        else if (OPERATION_MODE == NIGHT_MODE)
+        {
+            ssd1306_draw_string(&ssd, "Modo Noturno", 10, 28); // Desenha uma string
+            ssd1306_draw_string(&ssd, "Passar com", 14, 39);   // Desenha uma string
+            ssd1306_draw_string(&ssd, "atencao", 14, 49);      // Desenha uma string
+        }
+
+        ssd1306_send_data(&ssd);        // Atualiza o display
+        vTaskDelay(pdMS_TO_TICKS(100)); // Delay para não travar a CPU
     }
 }
 
