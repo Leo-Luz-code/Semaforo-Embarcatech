@@ -13,6 +13,12 @@
 #include <stdio.h>
 #include <stdint.h>
 
+/***************************************
+ *                                      *
+ *          Variáveis globais           *
+ *                                      *
+ ****************************************/
+
 const uint BUTTON_A = 5;        // Botão A
 const uint BUTTON_B = 6;        // Botão B
 volatile uint32_t current_time; // Tempo atual (usado para debounce)
@@ -62,6 +68,13 @@ volatile uint16_t NIGHT_MODE_SIGNAL_FLAG = ON;
 TaskHandle_t xHandleNormalMode = NULL; // Handle para a tarefa do modo normal
 TaskHandle_t xHandleNightMode = NULL;  // Handle para a tarefa do modo noturno
 
+/***************************************
+ *                                      *
+ *          Funções do sistema          *
+ *                                      *
+ ****************************************/
+
+// Função de handler de interrupção para os botões
 void gpio_irq_handler(uint gpio, uint32_t event)
 {
     current_time = to_us_since_boot(get_absolute_time());
@@ -191,6 +204,7 @@ void vBuzzerTask()
     }
 }
 
+// Task para controlar o LED neopixel
 void vNeoPixel()
 {
     npInit(MATRIX_LED_PIN); // Inicializa o LED neopixel
@@ -201,9 +215,11 @@ void vNeoPixel()
     applyBrightnessToMatrix(PEDESTRIANS_STOP, 0.05);
     applyBrightnessToMatrix(NIGHT_MODE_MATRIX, 0.05);
 
+    // A cada atualização da matriz, checamos o modo de operação
+    // Dessa forma, a matriz de LEDs não sofre delays na atualização
     while (true)
     {
-        if (OPERATION_MODE == NORMAL_MODE)
+        if (OPERATION_MODE == NORMAL_MODE) // Modo normal
         {
             switch (NORMAL_MODE_SIGNAL_FLAG)
             {
@@ -256,7 +272,7 @@ void vNeoPixel()
                 break;
             }
         }
-        else if (OPERATION_MODE == NIGHT_MODE)
+        else if (OPERATION_MODE == NIGHT_MODE) // Modo noturno
         {
             npClear();
             npWrite();
@@ -290,6 +306,7 @@ void vNormalModeControllerTask()
     }
 }
 
+// Task para modo noturno
 void vNightModeControllerTask()
 {
     vTaskSuspend(xHandleNormalMode); // Suspende a tarefa do modo normal
@@ -303,6 +320,7 @@ void vNightModeControllerTask()
     }
 }
 
+// Task para o display OLED
 void vDisplayTask()
 {
     // I2C Initialisation. Using it at 400Khz.
@@ -362,6 +380,7 @@ void vDisplayTask()
     }
 }
 
+// Task para alterar o modo de operação
 void vAlterTaskTask()
 {
     while (true)
@@ -380,6 +399,12 @@ void vAlterTaskTask()
         vTaskDelay(pdMS_TO_TICKS(100)); // Delay para não travar a CPU
     }
 }
+
+/***************************************
+ *                                      *
+ *          Função principal            *
+ *                                      *
+ ****************************************/
 
 int main()
 {
