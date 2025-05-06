@@ -167,7 +167,7 @@ void vBuzzerTask()
                 pwm_set_gpio_level(BUZZER_A, 128);
                 vTaskDelay(pdMS_TO_TICKS(1000));
                 pwm_set_gpio_level(BUZZER_A, 0);
-                vTaskDelay(pdMS_TO_TICKS(500));
+                vTaskDelay(pdMS_TO_TICKS(5000));
                 break;
 
             case YELLOW_SIGNAL:
