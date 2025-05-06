@@ -20,7 +20,6 @@
  ****************************************/
 
 const uint BUTTON_A = 5;        // Botão A
-const uint BUTTON_B = 6;        // Botão B
 volatile uint32_t current_time; // Tempo atual (usado para debounce)
 static volatile uint32_t last_time_A = 0;
 
@@ -39,7 +38,6 @@ const uint16_t BUZZER_A = 21;
 
 const float DIVIDER_PWM = 64.0; // Divisor de clock para PWM
 const uint16_t PERIOD = 4096;   // Período do PWM
-uint16_t last_buzzer_time = 0;
 uint slice_buzzer;
 
 typedef enum
@@ -73,25 +71,6 @@ TaskHandle_t xHandleNightMode = NULL;  // Handle para a tarefa do modo noturno
  *          Funções do sistema          *
  *                                      *
  ****************************************/
-
-// Função de handler de interrupção para os botões
-void gpio_irq_handler(uint gpio, uint32_t event)
-{
-    current_time = to_us_since_boot(get_absolute_time());
-
-    if (gpio == BUTTON_A && (current_time - last_time_A > 200000))
-    {
-        last_time_A = current_time;
-        OPERATION_MODE = (OPERATION_MODE == NORMAL_MODE) ? NIGHT_MODE : NORMAL_MODE;
-    }
-
-    // Trecho para modo BOOTSEL com botão B
-    if (gpio == BUTTON_B)
-    {
-        reset_usb_boot(0, 0);
-    }
-}
-
 void setup_pwm(uint gpio, uint *slice, uint16_t level)
 {
     gpio_set_function(gpio, GPIO_FUNC_PWM);
@@ -100,6 +79,27 @@ void setup_pwm(uint gpio, uint *slice, uint16_t level)
     pwm_set_wrap(*slice, PERIOD);
     pwm_set_gpio_level(gpio, level);
     pwm_set_enabled(*slice, true);
+}
+
+// Task para controlar o botão A
+void vButtonATask()
+{
+    gpio_init(BUTTON_A);
+    gpio_set_dir(BUTTON_A, GPIO_IN);
+    gpio_pull_up(BUTTON_A);
+
+    while (true)
+    {
+        current_time = to_us_since_boot(get_absolute_time());
+
+        if (!gpio_get(BUTTON_A) && (current_time - last_time_A > 200000))
+        {
+            last_time_A = current_time;
+            OPERATION_MODE = (OPERATION_MODE == NORMAL_MODE) ? NIGHT_MODE : NORMAL_MODE;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(10)); // Pequeno delay para evitar uso excessivo da CPU
+    }
 }
 
 // Task para controlar o LED RGB
@@ -408,19 +408,6 @@ void vAlterTaskTask()
 
 int main()
 {
-    // Para ser utilizado o modo BOOTSEL com botão B
-    gpio_init(BUTTON_B);
-    gpio_set_dir(BUTTON_B, GPIO_IN);
-    gpio_pull_up(BUTTON_B);
-
-    // Para ser utilizado a alteração do modo com botão A
-    gpio_init(BUTTON_A);
-    gpio_set_dir(BUTTON_A, GPIO_IN);
-    gpio_pull_up(BUTTON_A);
-
-    gpio_set_irq_enabled_with_callback(BUTTON_B, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
-    gpio_set_irq_enabled(BUTTON_A, GPIO_IRQ_EDGE_FALL, true);
-
     stdio_init_all();
 
     xTaskCreate(vNormalModeControllerTask, "Normal mode task", configMINIMAL_STACK_SIZE,
@@ -436,6 +423,8 @@ int main()
     xTaskCreate(vBuzzerTask, "Buzzer Task", configMINIMAL_STACK_SIZE,
                 NULL, tskIDLE_PRIORITY, NULL);
     xTaskCreate(vNeoPixel, "NeoPixel Task", configMINIMAL_STACK_SIZE,
+                NULL, tskIDLE_PRIORITY, NULL);
+    xTaskCreate(vButtonATask, "Button A Task", configMINIMAL_STACK_SIZE,
                 NULL, tskIDLE_PRIORITY, NULL);
 
     vTaskStartScheduler();
