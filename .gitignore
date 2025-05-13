@@ -1,5 +1,6 @@
 build
 .vscode
+pico_sdk_import.cmake
 CMakeLists.txt.user
 CMakeCache.txt
 CMakeFiles

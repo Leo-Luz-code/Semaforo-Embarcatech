@@ -63,9 +63,6 @@ volatile uint16_t OPERATION_MODE = NORMAL_MODE; // Modo de operação inicial
 volatile uint16_t NORMAL_MODE_SIGNAL_FLAG = GREEN_SIGNAL;
 volatile uint16_t NIGHT_MODE_SIGNAL_FLAG = ON;
 
-TaskHandle_t xHandleNormalMode = NULL; // Handle para a tarefa do modo normal
-TaskHandle_t xHandleNightMode = NULL;  // Handle para a tarefa do modo noturno
-
 /***************************************
  *                                      *
  *          Funções do sistema          *
@@ -292,7 +289,6 @@ void vNeoPixel()
 // Task para modo normal
 void vNormalModeControllerTask()
 {
-    vTaskSuspend(xHandleNightMode); // Suspende a tarefa do modo noturno
     while (true)
     {
         NORMAL_MODE_SIGNAL_FLAG = GREEN_SIGNAL;
@@ -309,7 +305,6 @@ void vNormalModeControllerTask()
 // Task para modo noturno
 void vNightModeControllerTask()
 {
-    vTaskSuspend(xHandleNormalMode); // Suspende a tarefa do modo normal
     while (true)
     {
         NIGHT_MODE_SIGNAL_FLAG = ON;
@@ -380,26 +375,6 @@ void vDisplayTask()
     }
 }
 
-// Task para alterar o modo de operação
-void vAlterTaskTask()
-{
-    while (true)
-    {
-        if (OPERATION_MODE == NORMAL_MODE)
-        {
-            vTaskSuspend(xHandleNightMode); // Suspende a tarefa do modo noturno
-            vTaskResume(xHandleNormalMode); // Retoma a tarefa do modo normal
-        }
-        else if (OPERATION_MODE == NIGHT_MODE)
-        {
-            vTaskSuspend(xHandleNormalMode); // Suspende a tarefa do modo normal
-            vTaskResume(xHandleNightMode);   // Retoma a tarefa do modo noturno
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(100)); // Delay para não travar a CPU
-    }
-}
-
 /***************************************
  *                                      *
  *          Função principal            *
@@ -411,12 +386,10 @@ int main()
     stdio_init_all();
 
     xTaskCreate(vNormalModeControllerTask, "Normal mode task", configMINIMAL_STACK_SIZE,
-                NULL, tskIDLE_PRIORITY, &xHandleNormalMode);
-    xTaskCreate(vNightModeControllerTask, "Night mode task", configMINIMAL_STACK_SIZE,
-                NULL, tskIDLE_PRIORITY, &xHandleNightMode);
-    xTaskCreate(vDisplayTask, "Cont Task Disp3", configMINIMAL_STACK_SIZE,
                 NULL, tskIDLE_PRIORITY, NULL);
-    xTaskCreate(vAlterTaskTask, "Alter Task", configMINIMAL_STACK_SIZE,
+    xTaskCreate(vNightModeControllerTask, "Night mode task", configMINIMAL_STACK_SIZE,
+                NULL, tskIDLE_PRIORITY, NULL);
+    xTaskCreate(vDisplayTask, "Cont Task Disp3", configMINIMAL_STACK_SIZE,
                 NULL, tskIDLE_PRIORITY, NULL);
     xTaskCreate(vLEDTask, "LED Task", configMINIMAL_STACK_SIZE,
                 NULL, tskIDLE_PRIORITY, NULL);
